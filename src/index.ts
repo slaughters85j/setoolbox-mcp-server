@@ -21,7 +21,7 @@ import {
   type AgentRequest,
 } from "./exchange.js";
 
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 const INPUT_SCHEMA_VERSION = 1;
 
 /** Resolves the folder path from `--folder` or the environment. Exits with a clear message otherwise. */
