@@ -24,6 +24,12 @@ import {
 const SERVER_VERSION = "0.2.0";
 const INPUT_SCHEMA_VERSION = 1;
 
+/// `--version` prints the version and exits. It doubles as the warm-up run after registration: the first npx launch fetches and builds, which can exceed an agent tool's startup timeout, and the printed version proves which build the cache holds.
+if (process.argv.includes("--version")) {
+  console.log(SERVER_VERSION);
+  process.exit(0);
+}
+
 /** Resolves the folder path from `--folder` or the environment. Exits with a clear message otherwise. */
 function resolveFolder(argv: string[]): string {
   const flag = argv.indexOf("--folder");

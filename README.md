@@ -10,31 +10,37 @@ An MCP server for [SEToolBox](https://ubs-analytics.com), the systems engineerin
 
 ## Install and register
 
-No clone, no build: `npx` fetches and builds the server on first use.
+No clone, no build: `npx` fetches and builds the server on first use. Pin a release tag so every machine gets the same code; the default branch is not pinned and npx caches what it fetched.
+
+Warm the cache first, and confirm the version it prints:
+
+```bash
+npx -y github:slaughters85j/setoolbox-mcp-server#v0.2.0 --version
+```
 
 Claude Code:
 
 ```bash
-claude mcp add --scope user setoolbox -e "SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder" -- npx -y github:slaughters85j/setoolbox-mcp-server
+claude mcp add --scope user setoolbox -e "SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder" -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.2.0
 ```
 
 Codex CLI:
 
 ```bash
-codex mcp add setoolbox --env SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder -- npx -y github:slaughters85j/setoolbox-mcp-server
+codex mcp add setoolbox --env SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.2.0
 ```
 
-Claude desktop app, in `~/Library/Application Support/Claude/claude_desktop_config.json` (quit the app before editing, or it overwrites the file):
+Claude desktop app, in `~/Library/Application Support/Claude/claude_desktop_config.json`. Use the absolute path of `npx` (`which npx`); the desktop app does not load your shell PATH. Quit the app before editing when you can, since it rewrites the file on quit; if the agent doing this is running inside the desktop app, write the entry anyway and check it after the restart:
 
 ```json
 "setoolbox": {
-  "command": "npx",
-  "args": ["-y", "github:slaughters85j/setoolbox-mcp-server"],
+  "command": "/opt/homebrew/bin/npx",
+  "args": ["-y", "github:slaughters85j/setoolbox-mcp-server#v0.2.0"],
   "env": { "SETOOLBOX_AGENT_FOLDER": "/path/to/your/agent/folder" }
 }
 ```
 
-Then quit and relaunch the tool.
+Then quit and relaunch the tool. To confirm which build is live, call `setoolbox_status` and read `serverVersion`; tool descriptions can be stale in a client's cache, the status payload cannot.
 
 | Setting | Source | Default |
 |---|---|---|
