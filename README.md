@@ -79,6 +79,40 @@ Then quit and relaunch the tool. To confirm which build is live, call `setoolbox
 
 The server writes only `in/<runId>.json.tmp` and the rename. It never touches `out/`, `done/`, or `schema/`, never deletes, and never resends under a used runId.
 
+## Using the folder without this server
+
+Any agent, script, or person with write access to the folder can drive the app with plain files. The server is only a convenience over this exchange, and the app treats both the same. Ask the SEToolBox user for the folder path; it is shown in the app's Settings under Agent Runs, with a copy button.
+
+1. **Read the blank form first.** `schema/<tool>.json` (`link_budget`, `radar_range`, `eoir`) lists every field with its unit and whether it is required. Use only those field names and units.
+2. **Write the request as `in/<runId>.json.tmp`, then rename it to `in/<runId>.json`.** The rename is the handoff; the app ignores `.tmp` files. Pick a fresh `runId` every time, for example a timestamp plus a short random suffix.
+3. **Poll `out/<runId>.json`.** It appears within a second or two when the app is running and allowed. If it never appears, the app is not running, the folder is not chosen in Settings, or "Allow agent runs" is off. Do not resend under the same `runId`; write a new request.
+4. **Read the result file as is.** `status` says `ok`, `undetermined`, or `error`. `undetermined` means the app could not determine the quantity from what you sent; `answer.missingInputs` names what it needs. `error` carries `correction`, which says what to fix.
+5. **Never do the math yourself.** The app is the calculator; the point of the exchange is that every number is the app's, reproducible by `runId`, saved in the user's project when `save` is given.
+
+A calculation request:
+
+```json
+{
+  "runId": "2026-09-13T21-02-11-a7f3",
+  "tool": "link_budget",
+  "inputSchemaVersion": 1,
+  "save": { "projectName": "X-band Study", "analysisName": "Agent run 3" },
+  "inputs": {
+    "transmitPower": { "value": 25, "unit": "W" },
+    "frequency": { "value": 8.4, "unit": "GHz" },
+    "distance": { "value": 500, "unit": "km" }
+  }
+}
+```
+
+A read request; `project.read` takes exactly one of `projectId` or `projectName`, and `detail` is `summary` (default) or `full`:
+
+```json
+{ "runId": "2026-09-13T21-03-40-b1c2", "operation": "project.read", "projectName": "X-band Study", "detail": "summary" }
+```
+
+`{ "runId": "...", "operation": "project.list" }` lists every project with record counts. Reads save nothing and change nothing. The result's `data` holds the projects or the project; a `full` read returns the app's own export JSON.
+
 ## Skill
 
 `skill/setoolbox-agent-runs/SKILL.md` teaches an agent when and how to use these tools, including a project review procedure. Copy or link it into your agent's skills folder.
