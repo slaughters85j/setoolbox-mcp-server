@@ -72,6 +72,7 @@ test("export writes a sweep export request with the stated axes and returns the 
     ranges: { unit: "km", values: [1, 5, 10] },
     metrics: ["cross", "targetMinimum"],
     target: { width: { value: 5.3, unit: "m" }, height: { value: 1.9, unit: "m" }, geometry: "Upright, facing sensor", label: "SUV side" },
+    figures: { points: [{ height: 2000, range: 10 }], formats: ["svg", "png"], display: ["targetFit"], asset: "suvSide" },
   };
   const result = structured(await client.callTool({ name: "setoolbox_export", arguments: args }));
   const runId = await responder;
@@ -82,6 +83,8 @@ test("export writes a sweep export request with the stated axes and returns the 
   assert.equal(both.isError, true);
   const noAxis = await client.callTool({ name: "setoolbox_export", arguments: { projectName: "A", ranges: args.ranges, metrics: ["cross"] } });
   assert.equal(noAxis.isError, true, "heights are required; the server must not fill them");
+  const noAsset = await client.callTool({ name: "setoolbox_export", arguments: { ...args, figures: { points: [{ height: 500, range: 1 }], formats: ["svg"], display: ["targetFit"] } } });
+  assert.equal(noAsset.isError, true, "the illustration is required; the server must not choose it");
   await client.close();
 });
 

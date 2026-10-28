@@ -53,7 +53,7 @@ export interface Length {
   unit: string;
 }
 
-/** An EO/IR sweep export request. The app writes workbooks under out/exports/<runId>/ and changes nothing in its store. */
+/** An EO/IR sweep export request. The app writes workbooks, and any requested coverage figures, under out/exports/<runId>/ and changes nothing in its store. */
 export interface AgentExportRequest {
   runId: string;
   operation: "eoir.sweepExport";
@@ -65,6 +65,7 @@ export interface AgentExportRequest {
   ranges: SweepAxis;
   metrics: string[];
   target?: { width: Length; height: Length; geometry: string; label?: string; photonRadiance?: Length };
+  figures?: { points: { height: number; range: number }[]; formats: string[]; display: string[]; asset: string };
 }
 
 /** A result file. Only the keys this module reads are typed; everything is passed through verbatim. */

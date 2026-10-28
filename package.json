@@ -1,6 +1,6 @@
 {
   "name": "setoolbox-mcp-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for SEToolBox agent runs: Link Budget, Radar Range, and EO/IR calculations plus project reads, over the app's watched-folder exchange",
   "license": "MIT",
   "repository": {
@@ -9,8 +9,15 @@
   },
   "type": "module",
   "main": "dist/index.js",
-  "bin": { "setoolbox-mcp-server": "dist/index.js" },
-  "files": ["dist", "skill", "README.md", "LICENSE"],
+  "bin": {
+    "setoolbox-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "skill",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "prepare": "tsc",
@@ -18,7 +25,9 @@
     "test": "tsc && node --test dist/exchange.test.js dist/server.test.js",
     "clean": "rm -rf dist"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.25.0"

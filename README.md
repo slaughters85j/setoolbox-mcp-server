@@ -1,6 +1,6 @@
 # setoolbox-mcp-server
 
-An MCP server for [SEToolBox](https://ubs-analytics.com), the systems engineering calculator for macOS and iPadOS. It lets an AI agent run the app's Link Budget, Radar Range, and EO/IR calculators, read the user's projects, and export EO/IR parameter sweep workbooks, through the folder the app watches. The app does every calculation and writes every file; this server only writes request files and returns the app's result files unchanged.
+An MCP server for [SEToolBox](https://ubs-analytics.com), the systems engineering calculator for macOS and iPadOS. It lets an AI agent run the app's Link Budget, Radar Range, and EO/IR calculators, read the user's projects, and export EO/IR parameter sweep workbooks with their target coverage figures, through the folder the app watches. The app does every calculation and writes every file; this server only writes request files and returns the app's result files unchanged.
 
 ## Requirements
 
@@ -15,19 +15,19 @@ No clone, no build: `npx` fetches and builds the server on first use. Pin a rele
 Warm the cache first, and confirm the version it prints:
 
 ```bash
-npx -y github:slaughters85j/setoolbox-mcp-server#v0.3.0 --version
+npx -y github:slaughters85j/setoolbox-mcp-server#v0.4.0 --version
 ```
 
 Claude Code:
 
 ```bash
-claude mcp add --scope user setoolbox -e "SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder" -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.3.0
+claude mcp add --scope user setoolbox -e "SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder" -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.4.0
 ```
 
 Codex CLI:
 
 ```bash
-codex mcp add setoolbox --env SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.3.0
+codex mcp add setoolbox --env SETOOLBOX_AGENT_FOLDER=/path/to/your/agent/folder -- npx -y github:slaughters85j/setoolbox-mcp-server#v0.4.0
 ```
 
 Claude desktop app, in `~/Library/Application Support/Claude/claude_desktop_config.json`. Use the absolute path of `npx` (`which npx`); the desktop app does not load your shell PATH. Quit the app before editing when you can, since it rewrites the file on quit; if the agent doing this is running inside the desktop app, write the entry anyway and check it after the restart:
@@ -35,7 +35,7 @@ Claude desktop app, in `~/Library/Application Support/Claude/claude_desktop_conf
 ```json
 "setoolbox": {
   "command": "/opt/homebrew/bin/npx",
-  "args": ["-y", "github:slaughters85j/setoolbox-mcp-server#v0.3.0"],
+  "args": ["-y", "github:slaughters85j/setoolbox-mcp-server#v0.4.0"],
   "env": { "SETOOLBOX_AGENT_FOLDER": "/path/to/your/agent/folder" }
 }
 ```
@@ -60,7 +60,7 @@ Then quit and relaunch the tool. To confirm which build is live, call `setoolbox
 | `setoolbox_status` | Folder present, schema versions, queue depth, last result age |
 | `setoolbox_list_projects` | Every project with per-family record counts (read only) |
 | `setoolbox_read_project` | One project: summary rows, or the full export JSON (read only) |
-| `setoolbox_export` | EO/IR parameter sweep workbooks for a project's analyses, written by the app under `out/exports/<runId>/` (store unchanged) |
+| `setoolbox_export` | EO/IR parameter sweep workbooks for a project's analyses, and optionally target coverage figures (SVG, PNG) from the same snapshot, written by the app under `out/exports/<runId>/` (store unchanged) |
 
 ## The folder protocol
 
@@ -68,7 +68,7 @@ Then quit and relaunch the tool. To confirm which build is live, call `setoolbox
 <folder>/
   in/      requests, written as <runId>.json.tmp then renamed to <runId>.json
   out/     results, <runId>.json; or <request file name>.error.json when the runId could not be trusted
-           exports/<runId>/ holds the workbooks a sweep export wrote; it is pruned with its result
+           exports/<runId>/ holds the workbooks a sweep export wrote, and its figures in a subfolder per analysis; it is pruned with its result
   done/    archived requests
   schema/  link_budget.json, radar_range.json, eoir.json
 ```
@@ -76,7 +76,7 @@ Then quit and relaunch the tool. To confirm which build is live, call `setoolbox
 - `runId`: 1 to 64 characters of `[A-Za-z0-9._-]`, no leading dot, equal to the file name without `.json`, never reused. The app never overwrites a result.
 - A calculation request carries `tool`, `inputSchemaVersion` (1), `inputs` (every physical quantity as `{"value": n, "unit": "..."}`), optional `save` (`projectName`, `analysisName`), and optional `displayUnits`.
 - A read request carries `operation` (`project.list` or `project.read`) instead of `tool` and `inputs`.
-- A sweep export carries `operation` `eoir.sweepExport`, one of `projectId` or `projectName`, optional `analysisIds`, `heights` and `ranges` (each `{"unit", "values": [...]}` or `{"unit", "start", "stop", "step"}`), `metrics`, and `target` when a target metric is listed. The axes are required; the app never substitutes remembered sweep settings. The result's `data` lists `written` workbooks and `skipped` analyses with reasons, and `assurance.level` is `exported`.
+- A sweep export carries `operation` `eoir.sweepExport`, one of `projectId` or `projectName`, optional `analysisIds`, `heights` and `ranges` (each `{"unit", "values": [...]}` or `{"unit", "start", "stop", "step"}`), `metrics`, `target` when a target metric is listed or figures are requested, and optional `figures` (`points` as `[{"height", "range"}]` on the request's axes and in their units, `formats` `svg`/`png`, `display` `targetFit`/`detectorDetail`, and `asset`, the target illustration). The axes are required; the app never substitutes remembered sweep settings or figure choices. Figures are drawn from the same snapshot as the workbook, so their numbers equal its cells. The result's `data` lists `written` workbooks, each with its `figures` and `figuresSkipped` when figures were asked for, and `skipped` analyses with reasons; `assurance.level` is `exported`.
 - Results carry, in order: `status` (`ok`, `undetermined`, `error`), `answer`, `assurance`, `result`, `warnings`, `run`, then `data` for reads, `agentInstruction` for undetermined answers, or the error fields. `run` holds `runId`, `toolVersion`, `inputSchemaVersion`, `timestamp`, `analysisId`, `persisted`, `sessionId`, and on calculation results `tool`.
 - `undetermined` is a normal outcome. Report the quantity as not determined and ask for `answer.missingInputs`.
 
@@ -127,4 +127,4 @@ npm install
 npm test
 ```
 
-Seventeen tests run against a temporary folder with a fake responder standing in for the app. Two live tests run only when `SETOOLBOX_AGENT_FOLDER` is set and the app is running.
+Eighteen tests run against a temporary folder with a fake responder standing in for the app. Two live tests run only when `SETOOLBOX_AGENT_FOLDER` is set and the app is running.

@@ -44,7 +44,8 @@ When the user wants the parameter sweep workbooks for a project's EO/IR analyses
 1. Ask for the sweep settings if the user has not given them: heights, ground ranges, worksheets, and for target worksheets the target width, height, and geometry. Never invent them, and never assume the app's last-used values; the app refuses a request without axes.
 2. Select the project by name or id. Omit `analysisIds` to export every EO/IR analysis, or list the ids from `setoolbox_read_project`.
 3. Allow time: set `timeoutSeconds` to about 5 seconds per analysis for a large project.
-4. Report `data.folder` and each `written` file, and every `skipped` analysis with its reason (a space-only analysis is skipped, for example). Pass on any `notices` on a written workbook; they are the same defects the app's export dialog lists.
+4. When the user wants the target coverage figures too, add `figures` to the same call; never export them in a separate call, because the figures must come from the same snapshot as the workbook. Ask for the points (height and range pairs, which must be values on the heights and ranges axes), the formats (`svg`, `png`), the display (`targetFit`, `detectorDetail`), and the target illustration (`asset`, for example `suvSide`). Do not choose any of them for the user.
+5. Report `data.folder` and each `written` file with its `figures`, and every `skipped` analysis or `figuresSkipped` figure with its reason (a space-only analysis is skipped, for example). Pass on any `notices` on a written workbook; they are the same defects the app's export dialog lists.
 
 ## Per-tool rules the schema notes will repeat
 

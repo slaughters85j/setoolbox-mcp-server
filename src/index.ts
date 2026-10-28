@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * setoolbox-mcp-server: nine tools over the SEToolBox agent run folder exchange, six for calculations, two for reading projects, and one for exporting EO/IR sweep workbooks.
+ * setoolbox-mcp-server: nine tools over the SEToolBox agent run folder exchange, six for calculations, two for reading projects, and one for exporting EO/IR sweep workbooks and their target coverage figures.
  *
  * Transport is stdio only. Configuration comes from `SETOOLBOX_AGENT_FOLDER` (or `--folder <path>`),
  * `SETOOLBOX_AGENT_TIMEOUT_S` (default 60), and `SETOOLBOX_AGENT_POLL_MS` (default 1000).
@@ -22,7 +22,7 @@ import {
   type AgentRequest,
 } from "./exchange.js";
 
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.4.0";
 const INPUT_SCHEMA_VERSION = 1;
 
 /// `--version` prints the version and exits. It doubles as the warm-up run after registration: the first npx launch fetches and builds, which can exceed an agent tool's startup timeout, and the printed version proves which build the cache holds.
@@ -213,22 +213,24 @@ const axisSchema = z
   .describe('{ "unit", "values": [...] } or { "unit", "start", "stop", "step" }. The stop is included only when reached by a whole number of steps.');
 const targetLengthSchema = z.object({ value: z.number().positive(), unit: z.enum(["mm", "cm", "m", "ft"]) }).strict();
 const SWEEP_METRICS = ["cross", "along", "target", "targetVertical", "targetMinimum", "targetCoverage", "targetPhotons", "targetElectrons", "elevation", "slant", "aspect"] as const;
+const TARGET_ASSETS = ["personFront", "personSide", "sedanFront", "sedanSide", "suvFront", "suvSide", "vanFront", "vanSide", "rectangle"] as const;
 
 server.registerTool(
   "setoolbox_export",
   {
-    title: "Export EO/IR sweep workbooks",
-    description: `Ask SEToolBox to write a parameter sweep workbook for every EO/IR analysis in one project (or the listed analysisIds), using the app's own sweep export, so each file matches a hand export from the app with the same settings. Nothing in the user's store changes.
+    title: "Export EO/IR sweep workbooks and coverage figures",
+    description: `Ask SEToolBox to write a parameter sweep workbook for every EO/IR analysis in one project (or the listed analysisIds), using the app's own sweep export, so each file matches a hand export from the app with the same settings. Optionally also writes target coverage figures (SVG, PNG) from the same snapshot, so each figure's numbers equal its workbook cells. Nothing in the user's store changes.
 
 Args:
   - projectId or projectName (exactly one), as from setoolbox_list_projects.
   - analysisIds (optional): EO/IR analysis ids from setoolbox_read_project. Omit to export every EO/IR analysis in the project.
   - heights, ranges: required. The app never falls back to remembered sweep settings. Heights: up to 20 positive values. Ranges: up to 500 nonnegative values.
   - metrics: worksheet names, at least one: ${SWEEP_METRICS.join(", ")}.
-  - target: required when any target* metric is listed, refused otherwise. { width, height: { value, unit }, geometry: "Upright, facing sensor" | "Flat on the ground", label (optional), photonRadiance (optional { value, unit: "ph/s/m²/sr" }) }.
-  - timeoutSeconds (optional): a large project can take longer than a single run; allow about 5 seconds per analysis.
+  - target: required when any target* metric is listed or figures are requested, refused otherwise. { width, height: { value, unit }, geometry: "Upright, facing sensor" | "Flat on the ground", label (optional), photonRadiance (optional { value, unit: "ph/s/m²/sr" }) }.
+  - figures (optional): { points: [{ height, range }], formats: ["svg", "png"], display: ["targetFit", "detectorDetail"], asset }. Every field is required inside figures. Each point's height and range must be values on the heights and ranges axes, in their units. asset is the target illustration: ${TARGET_ASSETS.join(", ")}; a "Flat on the ground" target always draws as a rectangle. One file per analysis × point × display × format, in a subfolder per analysis.
+  - timeoutSeconds (optional): a large project can take longer than a single run; allow about 5 seconds per analysis, plus about 1 second per figure.
 
-Returns the result file verbatim. On status "ok", data.folder is out/exports/<runId>, data.written lists each workbook (analysisId, analysisName, file, points, notices), and data.skipped lists each analysis not exported with its reason (for example a space-only analysis). assurance.level is "exported". If every analysis is skipped the result is status "error" with error "nothing_exported" and the reasons in received. Workbook files are relative to the agent folder.`,
+Returns the result file verbatim. On status "ok", data.folder is out/exports/<runId>, data.written lists each workbook (analysisId, analysisName, file, points, notices, and with figures: figures as file paths and figuresSkipped with height, range, and reason), and data.skipped lists each analysis not exported with its reason (for example a space-only analysis). assurance.level is "exported". If every analysis is skipped the result is status "error" with error "nothing_exported" and the reasons in received. File paths are relative to the agent folder.`,
     inputSchema: {
       projectId: z.string().uuid().optional().describe("Project id from setoolbox_list_projects."),
       projectName: z.string().min(1).optional().describe("Exact project name."),
@@ -246,13 +248,23 @@ Returns the result file verbatim. On status "ok", data.folder is out/exports/<ru
         })
         .strict()
         .optional()
-        .describe("Planar target; required with target* metrics."),
+        .describe("Planar target; required with target* metrics or figures."),
+      figures: z
+        .object({
+          points: z.array(z.object({ height: z.number(), range: z.number() }).strict()).min(1),
+          formats: z.array(z.enum(["svg", "png"])).min(1),
+          display: z.array(z.enum(["targetFit", "detectorDetail"])).min(1),
+          asset: z.enum(TARGET_ASSETS),
+        })
+        .strict()
+        .optional()
+        .describe("Target coverage figures at points on the sweep axes."),
       runId: runIdSchema.optional(),
       timeoutSeconds: readTimeoutSchema,
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
-  async ({ projectId, projectName, analysisIds, heights, ranges, metrics, target, runId, timeoutSeconds }) =>
+  async ({ projectId, projectName, analysisIds, heights, ranges, metrics, target, figures, runId, timeoutSeconds }) =>
     guarded(async () => {
       if ((projectId === undefined) === (projectName === undefined)) {
         throw new ExchangeError("Send exactly one of projectId or projectName.", "invalid_selector");
@@ -262,6 +274,7 @@ Returns the result file verbatim. On status "ok", data.folder is out/exports/<ru
       if (projectName !== undefined) request.projectName = projectName;
       if (analysisIds !== undefined) request.analysisIds = analysisIds;
       if (target !== undefined) request.target = target;
+      if (figures !== undefined) request.figures = figures;
       await folder.submit(request);
       return folder.awaitResult(request.runId, (timeoutSeconds ?? defaultTimeoutMs / 1000) * 1000, pollMs);
     }),
