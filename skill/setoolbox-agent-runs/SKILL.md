@@ -37,6 +37,15 @@ The user keeps studies in SEToolBox projects. Each project holds records from ni
 
 Reads are exact copies of the store at the time of the read. `assurance.level` is `stored`. The one non-stable field is `tpmModel.id` in a full read, which the export encoder regenerates on every call; ignore it when comparing two reads.
 
+## Exporting EO/IR sweep workbooks
+
+When the user wants the parameter sweep workbooks for a project's EO/IR analyses, call `setoolbox_export` once instead of asking them to export each analysis in the app. The app writes each workbook with its own sweep export, so the files match a hand export with the same settings, and nothing in the store changes.
+
+1. Ask for the sweep settings if the user has not given them: heights, ground ranges, worksheets, and for target worksheets the target width, height, and geometry. Never invent them, and never assume the app's last-used values; the app refuses a request without axes.
+2. Select the project by name or id. Omit `analysisIds` to export every EO/IR analysis, or list the ids from `setoolbox_read_project`.
+3. Allow time: set `timeoutSeconds` to about 5 seconds per analysis for a large project.
+4. Report `data.folder` and each `written` file, and every `skipped` analysis with its reason (a space-only analysis is skipped, for example). Pass on any `notices` on a written workbook; they are the same defects the app's export dialog lists.
+
 ## Per-tool rules the schema notes will repeat
 
 **link_budget.** `linkType` picks the mode (Terrestrial, Space-to-Ground, Air-to-Ground, Ship-to-Shore, Satellite Crosslink). `additionalPathLoss` and `multiPathFadingMargin` are not inputs; the app sets them from `environmentType` and `pathType`. `autoCalculateWeatherLosses` defaults false; when true do not send `atmosphericLoss` or `rainLoss`. `requiredEbNo` is derived from modulation, coding gain, and implementation loss unless the user supplies it. Antenna efficiencies are fractions such as 0.55. Space links need `beamwidthFactorKappa`, `physicalTempOfAttenuation`, and `antennaNoiseTempClearSky` stated (typical 70, 290 K, 30 K) because the app never assumes them.

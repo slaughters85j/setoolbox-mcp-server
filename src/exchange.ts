@@ -44,6 +44,29 @@ export interface AgentReadRequest {
   detail?: "summary" | "full";
 }
 
+/** One sweep axis: explicit values, or start, stop, and step, always with a unit. */
+export type SweepAxis = { unit: string; values: number[] } | { unit: string; start: number; stop: number; step: number };
+
+/** A length with its unit. */
+export interface Length {
+  value: number;
+  unit: string;
+}
+
+/** An EO/IR sweep export request. The app writes workbooks under out/exports/<runId>/ and changes nothing in its store. */
+export interface AgentExportRequest {
+  runId: string;
+  operation: "eoir.sweepExport";
+  inputSchemaVersion: number;
+  projectId?: string;
+  projectName?: string;
+  analysisIds?: string[];
+  heights: SweepAxis;
+  ranges: SweepAxis;
+  metrics: string[];
+  target?: { width: Length; height: Length; geometry: string; label?: string; photonRadiance?: Length };
+}
+
 /** A result file. Only the keys this module reads are typed; everything is passed through verbatim. */
 export interface AgentResult {
   status: "ok" | "undetermined" | "error";
@@ -175,7 +198,7 @@ export class AgentFolder {
   }
 
   /** Writes the request atomically. Rejects a runId that already has a result or a queued request. */
-  async submit(request: AgentRequest | AgentReadRequest): Promise<string> {
+  async submit(request: AgentRequest | AgentReadRequest | AgentExportRequest): Promise<string> {
     assertValidRunId(request.runId);
     await this.assertReady();
     const finalPath = path.join(this.inDir, `${request.runId}.json`);
