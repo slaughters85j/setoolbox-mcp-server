@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * setoolbox-mcp-server: eight tools over the SEToolBox agent run folder exchange, six for calculations and two for reading projects.
+ * setoolbox-mcp-server: nine tools over the SEToolBox agent run folder exchange, six for calculations, two for reading projects, and one for exporting EO/IR sweep workbooks.
  *
  * Transport is stdio only. Configuration comes from `SETOOLBOX_AGENT_FOLDER` (or `--folder <path>`),
  * `SETOOLBOX_AGENT_TIMEOUT_S` (default 60), and `SETOOLBOX_AGENT_POLL_MS` (default 1000).
@@ -17,11 +17,12 @@ import {
   TOOL_DESCRIPTIONS,
   TOOL_NAMES,
   generateRunId,
+  type AgentExportRequest,
   type AgentReadRequest,
   type AgentRequest,
 } from "./exchange.js";
 
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 const INPUT_SCHEMA_VERSION = 1;
 
 /// `--version` prints the version and exits. It doubles as the warm-up run after registration: the first npx launch fetches and builds, which can exceed an agent tool's startup timeout, and the printed version proves which build the cache holds.
@@ -201,6 +202,68 @@ Family names in the summary are the keys of the full form, so a summary row can 
       if (projectId !== undefined) request.projectId = projectId;
       if (projectName !== undefined) request.projectName = projectName;
       return read(request, timeoutSeconds);
+    }),
+);
+
+const axisSchema = z
+  .union([
+    z.object({ unit: z.enum(["ft", "m", "km", "mi"]), values: z.array(z.number()).min(1) }).strict(),
+    z.object({ unit: z.enum(["ft", "m", "km", "mi"]), start: z.number(), stop: z.number(), step: z.number().positive() }).strict(),
+  ])
+  .describe('{ "unit", "values": [...] } or { "unit", "start", "stop", "step" }. The stop is included only when reached by a whole number of steps.');
+const targetLengthSchema = z.object({ value: z.number().positive(), unit: z.enum(["mm", "cm", "m", "ft"]) }).strict();
+const SWEEP_METRICS = ["cross", "along", "target", "targetVertical", "targetMinimum", "targetCoverage", "targetPhotons", "targetElectrons", "elevation", "slant", "aspect"] as const;
+
+server.registerTool(
+  "setoolbox_export",
+  {
+    title: "Export EO/IR sweep workbooks",
+    description: `Ask SEToolBox to write a parameter sweep workbook for every EO/IR analysis in one project (or the listed analysisIds), using the app's own sweep export, so each file matches a hand export from the app with the same settings. Nothing in the user's store changes.
+
+Args:
+  - projectId or projectName (exactly one), as from setoolbox_list_projects.
+  - analysisIds (optional): EO/IR analysis ids from setoolbox_read_project. Omit to export every EO/IR analysis in the project.
+  - heights, ranges: required. The app never falls back to remembered sweep settings. Heights: up to 20 positive values. Ranges: up to 500 nonnegative values.
+  - metrics: worksheet names, at least one: ${SWEEP_METRICS.join(", ")}.
+  - target: required when any target* metric is listed, refused otherwise. { width, height: { value, unit }, geometry: "Upright, facing sensor" | "Flat on the ground", label (optional), photonRadiance (optional { value, unit: "ph/s/m²/sr" }) }.
+  - timeoutSeconds (optional): a large project can take longer than a single run; allow about 5 seconds per analysis.
+
+Returns the result file verbatim. On status "ok", data.folder is out/exports/<runId>, data.written lists each workbook (analysisId, analysisName, file, points, notices), and data.skipped lists each analysis not exported with its reason (for example a space-only analysis). assurance.level is "exported". If every analysis is skipped the result is status "error" with error "nothing_exported" and the reasons in received. Workbook files are relative to the agent folder.`,
+    inputSchema: {
+      projectId: z.string().uuid().optional().describe("Project id from setoolbox_list_projects."),
+      projectName: z.string().min(1).optional().describe("Exact project name."),
+      analysisIds: z.array(z.string().uuid()).min(1).optional().describe("EO/IR analysis ids; omit for all."),
+      heights: axisSchema,
+      ranges: axisSchema,
+      metrics: z.array(z.enum(SWEEP_METRICS)).min(1).describe("Worksheets to write."),
+      target: z
+        .object({
+          width: targetLengthSchema,
+          height: targetLengthSchema,
+          geometry: z.enum(["Upright, facing sensor", "Flat on the ground"]),
+          label: z.string().optional(),
+          photonRadiance: z.object({ value: z.number().nonnegative(), unit: z.literal("ph/s/m²/sr") }).strict().optional(),
+        })
+        .strict()
+        .optional()
+        .describe("Planar target; required with target* metrics."),
+      runId: runIdSchema.optional(),
+      timeoutSeconds: readTimeoutSchema,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  async ({ projectId, projectName, analysisIds, heights, ranges, metrics, target, runId, timeoutSeconds }) =>
+    guarded(async () => {
+      if ((projectId === undefined) === (projectName === undefined)) {
+        throw new ExchangeError("Send exactly one of projectId or projectName.", "invalid_selector");
+      }
+      const request: AgentExportRequest = { runId: runId ?? generateRunId(), operation: "eoir.sweepExport", inputSchemaVersion: INPUT_SCHEMA_VERSION, heights, ranges, metrics };
+      if (projectId !== undefined) request.projectId = projectId;
+      if (projectName !== undefined) request.projectName = projectName;
+      if (analysisIds !== undefined) request.analysisIds = analysisIds;
+      if (target !== undefined) request.target = target;
+      await folder.submit(request);
+      return folder.awaitResult(request.runId, (timeoutSeconds ?? defaultTimeoutMs / 1000) * 1000, pollMs);
     }),
 );
 

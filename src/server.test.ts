@@ -54,10 +54,34 @@ function structured(result: Awaited<ReturnType<Client["callTool"]>>): Record<str
   return result.structuredContent as Record<string, unknown>;
 }
 
-test("the server exposes the eight tools", async () => {
+test("the server exposes the nine tools", async () => {
   const client = await connect(await makeFolder());
   const names = (await client.listTools()).tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ["setoolbox_get_result", "setoolbox_get_schema", "setoolbox_list_projects", "setoolbox_list_runs", "setoolbox_list_tools", "setoolbox_read_project", "setoolbox_run", "setoolbox_status"]);
+  assert.deepEqual(names, ["setoolbox_export", "setoolbox_get_result", "setoolbox_get_schema", "setoolbox_list_projects", "setoolbox_list_runs", "setoolbox_list_tools", "setoolbox_read_project", "setoolbox_run", "setoolbox_status"]);
+  await client.close();
+});
+
+test("export writes a sweep export request with the stated axes and returns the result verbatim", async () => {
+  const root = await makeFolder();
+  const client = await connect(root);
+  const payload = { status: "ok", assurance: { level: "exported" }, result: [], warnings: [], data: { folder: "out/exports/x", written: [{ file: "out/exports/x/a.xlsx" }], skipped: [] } };
+  const responder = respondOnce(root, payload);
+  const args = {
+    projectName: "MX-20HD 45000-04",
+    heights: { unit: "ft", start: 500, stop: 2000, step: 500 },
+    ranges: { unit: "km", values: [1, 5, 10] },
+    metrics: ["cross", "targetMinimum"],
+    target: { width: { value: 5.3, unit: "m" }, height: { value: 1.9, unit: "m" }, geometry: "Upright, facing sensor", label: "SUV side" },
+  };
+  const result = structured(await client.callTool({ name: "setoolbox_export", arguments: args }));
+  const runId = await responder;
+  assert.deepEqual(result.data, payload.data);
+  const request = JSON.parse(await fs.readFile(path.join(root, "done", `${runId}.json`), "utf8"));
+  assert.deepEqual(request, { runId, operation: "eoir.sweepExport", inputSchemaVersion: 1, ...args });
+  const both = await client.callTool({ name: "setoolbox_export", arguments: { ...args, projectId: "3fa85f64-5717-4562-b3fc-2c963f66afa6" } });
+  assert.equal(both.isError, true);
+  const noAxis = await client.callTool({ name: "setoolbox_export", arguments: { projectName: "A", ranges: args.ranges, metrics: ["cross"] } });
+  assert.equal(noAxis.isError, true, "heights are required; the server must not fill them");
   await client.close();
 });
 
