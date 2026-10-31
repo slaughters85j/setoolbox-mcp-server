@@ -166,7 +166,7 @@ server.registerTool(
   "setoolbox_list_projects",
   {
     title: "List SEToolBox projects",
-    description: `List every project in the user's SEToolBox store: id, name, dateCreated, lastModified, and counts of records per tool family (tpmDataList, statisticalTools, massBudgetProjects, budgetTools, spacePowerBudgetProjects, nonSpacePowerBudgetProjects, linkBudgetAnalyses, radarRangeAnalyses, eoirAnalyses).
+    description: `List every project in the user's SEToolBox store: id, name, dateCreated, lastModified, and counts of records for each of the ten tool families (tpmDataList, statisticalTools, massBudgetProjects, budgetTools, spacePowerBudgetProjects, nonSpacePowerBudgetProjects, epsAnalysisProjects, linkBudgetAnalyses, radarRangeAnalyses, eoirAnalyses).
 
 Goes through the same folder exchange as a run, so the app must be running with agent runs allowed. Returns the result file verbatim; the payload is under "data.projects". Nothing in the app changes.`,
     inputSchema: { timeoutSeconds: readTimeoutSchema },
@@ -181,7 +181,7 @@ server.registerTool(
     title: "Read one SEToolBox project",
     description: `Read one project from the user's SEToolBox store, by projectId or by exact projectName (never both). Use it to review a study, cross-check values between tools, or find an analysis id.
 
-detail "summary" (default): the project header plus "records", one row per record with family, id, name, and for Link Budget, Radar Range, and EO/IR analyses also lastModified and isAgentRun.
+detail "summary" (default): the project header plus "records", one row per record with family, id, and name; budget tool rows also carry lastModified, and Link Budget, Radar Range, and EO/IR rows carry lastModified and isAgentRun.
 detail "full": the project's complete export JSON, the same bytes the app's Export command writes, with every stored input and result of every record. Large; ask for it when you need values.
 
 Family names in the summary are the keys of the full form, so a summary row can be found again in the full read. Returns the result file verbatim; the payload is under "data". Nothing in the app changes. A wrong name yields status "error" with project_not_found; a name shared by two projects yields ambiguous_project, so select by projectId from setoolbox_list_projects.`,
